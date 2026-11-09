@@ -1,0 +1,21 @@
+# Used automatically when /etc/letsencrypt/live/${DOMAIN}/fullchain.pem exists.
+map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+
+server {
+  listen 80 default_server;
+  server_name ${DOMAIN};
+  location /.well-known/acme-challenge/ { root /var/www/certbot; } # certificate renewals
+  location / { return 301 https://$host$request_uri; }
+}
+
+server {
+  listen 443 ssl default_server;
+  http2 on;
+  server_name ${DOMAIN};
+  ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_session_cache shared:SSL:10m;
+  add_header Strict-Transport-Security "max-age=31536000" always;
+  include /etc/nginx/snippets/app.conf;
+}

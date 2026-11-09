@@ -1,0 +1,18 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+server/storage/
+mongo_data/
+
+# Old-site images folder contains uploaded webshell/malware files. Never commit or serve them.
+images/*.php
+images/*.asp
+images/*.aspx
+backups/
+local-certs/*
+!local-certs/.gitkeep

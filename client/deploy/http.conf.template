@@ -1,0 +1,9 @@
+# Used while there is no certificate yet (first start, local testing, or access by IP): plain HTTP.
+map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+
+server {
+  listen 80 default_server;
+  server_name ${DOMAIN};
+  location /.well-known/acme-challenge/ { root /var/www/certbot; } # lets you issue the certificate with this server running
+  include /etc/nginx/snippets/app.conf;
+}

@@ -1,0 +1,71 @@
+# Anaa Nutricare: MongoDB (private) + API (private) + nginx (the only public service, ports 80/443).
+# Works on a VPS and on a laptop. Settings come from a root .env file (copy .env.example to .env).
+#   docker compose up -d --build
+# nginx serves HTTPS when a Let's Encrypt certificate for DOMAIN exists, and plain HTTP otherwise (see docs/DEPLOYMENT.md).
+services:
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    # No "ports": the database is reachable only from the API container, never from the internet.
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?set MONGO_ROOT_USER in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}
+    volumes:
+      - mongo-data:/data/db
+    networks: [anaa_internal]
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep -q 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  backend:
+    build: ./server
+    restart: unless-stopped
+    # No "ports": only nginx talks to the API, over the internal network.
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-https://${DOMAIN}}
+      MONGO_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongodb:27017/anaa_nutricare?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-Anaa Nutricare <no-reply@localhost>}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+    volumes:
+      - api-storage:/app/storage
+    networks: [anaa_internal]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  web:
+    build: ./client
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Certificates issued on the VPS. On a laptop (Windows/Mac) keep the defaults below from .env.example: an empty local folder is fine without HTTPS.
+      - ${LETSENCRYPT_DIR:-/etc/letsencrypt}:/etc/letsencrypt:ro
+      - ${CERTBOT_WEBROOT:-/var/www/certbot}:/var/www/certbot:ro # renewal challenge files
+    networks: [anaa_internal]
+    depends_on:
+      - backend
+
+networks:
+  anaa_internal:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  api-storage:
