@@ -26,7 +26,8 @@ import staffRoutes from './modules/staff/staff.routes.js';
 export function createApp() {
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', 1);
+  // Number of web servers in front of the API (1 = nginx only; 2 when a shared web server also sits in front of our nginx).
+  app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS) || 1);
 
   app.use(helmet());
   app.use(cors({ origin: env.CLIENT_ORIGIN, credentials: true }));

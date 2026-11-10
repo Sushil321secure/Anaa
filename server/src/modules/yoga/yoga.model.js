@@ -59,8 +59,10 @@ const bookingSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-// One live booking per person per session, enforced by the database.
-bookingSchema.index({ user: 1, session: 1 }, { unique: true, partialFilterExpression: { bookingStatus: { $in: ['pending', 'confirmed'] } } });
+// One live booking per person per session, enforced by the database. "Live" = pending or confirmed. The filter uses a range
+// instead of $in because partial indexes only accept $in from MongoDB 6.0 and the UAT server runs MongoDB 4.4. The statuses sort
+// alphabetically as cancelled < completed < confirmed < pending, so ">= 'confirmed'" is exactly pending + confirmed.
+bookingSchema.index({ user: 1, session: 1 }, { unique: true, partialFilterExpression: { bookingStatus: { $gte: 'confirmed' } } });
 
 export const YogaSession = mongoose.model('YogaSession', sessionSchema);
 export const YogaBooking = mongoose.model('YogaBooking', bookingSchema);

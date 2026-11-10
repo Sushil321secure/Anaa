@@ -470,3 +470,19 @@ test('coach dropdown data: admins get each coach with an e-mail; other staff onl
   const d = await coach.c.get('/staff/dietitians');
   assert.ok(d.data.items.every((c) => c.email === undefined), 'a coach does not receive colleagues e-mails');
 });
+
+test('database rejects a second live booking for the same person and session, but allows rebooking after a cancellation', { skip }, async () => {
+  const admin = await person('ADMIN');
+  const coach = await person('DIETITIAN');
+  const cust = await person('CUSTOMER');
+  const id = await published(admin, coach, 900, { maxParticipants: 5 });
+  const mk = (status) => YogaBooking.create({ user: cust.user._id, session: id, bookingReference: `YG-IDX-${crypto.randomBytes(4).toString('hex')}`, bookingStatus: status });
+  await mk('confirmed');
+  await assert.rejects(mk('confirmed'), /E11000/, 'a second confirmed booking is refused by the index');
+  await assert.rejects(mk('pending'), /E11000/, 'so is a pending one');
+  await YogaBooking.updateMany({ user: cust.user._id, session: id }, { $set: { bookingStatus: 'cancelled' } });
+  await mk('pending'); // allowed once the earlier one is cancelled
+  await YogaBooking.updateMany({ user: cust.user._id, session: id, bookingStatus: 'pending' }, { $set: { bookingStatus: 'completed' } });
+  await mk('confirmed'); // completed bookings do not block either
+  await assert.rejects(mk('pending'), /E11000/);
+});
